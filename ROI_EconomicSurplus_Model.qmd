@@ -1,0 +1,587 @@
+---
+title: "Returns on Investment to Herbicides: Example of Spatial Economic Surplus Approach"
+format: 
+    html:
+      code-fold: true
+      code-tools: true
+fig-dpi: 300
+fig-width: 8.88
+fig-align: center
+fig-height: 5
+
+self-contained: true
+author: Maxwell Mkondiwa
+editor: visual
+toc: true
+toc-location: left
+number-sections: true
+execute: 
+  message: false
+  warning: false
+  echo: true
+---
+
+# Introduction
+
+The conventional approach to valuing agricultural research is the economic surplus approach (Alston et al 1995). This approach is commonly applied to country wide research programs rather than disaggregated to district level. In this note, we demonstrate how to use causal machine learning heterogeneous treatment effects to make return on investment analyses that are sufficiently disaggregated.
+
+# Steps in Return on Investment Economic Surplus Model
+
+## Step 1: Baseline area, production, and yield
+
+```{r, warning=FALSE}
+library(rio)
+
+APY_data <- import("Data_1997_23_Cleaned.xlsx", sheet = "All_data")
+
+APY_data$Production_Tonnes <- as.numeric(APY_data$Production_Tonnes)
+
+APY_data_wheat_2015_19 <- subset(APY_data, APY_data$Season == "Rabi" & APY_data$Crop == "Wheat" & APY_data$Year %in% c("2015-16", "2016-17", "2017-18", "2018-19", "2019-20"))
+
+APY_data_wheat_2015_19$Season <- NULL
+APY_data_wheat_2015_19$Crop <- NULL
+APY_data_wheat_2015_19$Season <- NULL
+library(data.table)
+APY_data_wheat_2015_19 <- data.table(APY_data_wheat_2015_19)
+APY_data_wheat_2015_19_ave <- APY_data_wheat_2015_19[, lapply(.SD, base::mean, na.rm = TRUE), by = .(Districts)]
+
+APY_data_wheat_2015_19_ave <- APY_data_wheat_2015_19[, .(Area_Hectare = base::mean(Area_Hectare), Production_Tonnes = base::mean(Production_Tonnes), Yield_Tonnes_Hectare = base::mean(Yield_Tonnes_Hectare)), by = .(Districts)]
+
+# Download all the data
+library(reactable)
+library(htmltools)
+library(fontawesome)
+
+htmltools::browsable(
+    tagList(
+        tags$button(
+            tagList(fontawesome::fa("download"), "Download as CSV"),
+            onclick = "Reactable.downloadDataCSV('APY_data_wheat_2015_19_ave', 'APY_data_wheat_2015_19_ave.csv')"
+        ),
+        reactable(
+            APY_data_wheat_2015_19_ave,
+            searchable = TRUE,
+            defaultPageSize = 38,
+            elementId = "APY_data_wheat_2015_19_ave"
+        )
+    )
+)
+
+
+# library(ggplot2)
+# ggplot() +
+#     geom_line(data = subset(APY_data, APY_data$Crop == "Wheat"), aes(x = Year, y = Area_Hectare, group = Districts, linetype = Districts, color = Districts), linewidth = 1.5) +
+#     labs(x = "Year", y = "Area") +
+#     theme_bw() 
+
+
+# Having the baseline we need to create this from 2020 to 2030
+
+library(tidyverse)
+APY_data_wheat_2019_30 <- APY_data_wheat_2015_19_ave %>%
+    mutate(year = list(2019:2030)) %>%
+    separate_rows(year, sep = ",", convert = T)
+
+# Delete Kishanganji due to lack of data
+APY_data_wheat_2019_30 <- subset(APY_data_wheat_2019_30, !(APY_data_wheat_2019_30$Districts == "KISHANGANJ"))
+
+```
+
+## Step 2: Adoption data and projections
+
+```{r, warning=FALSE}
+# District level Cumulative Adoption -------------------------------------------
+library(rio)
+DistrictCumulativeAdoption=import("DistrictCumulativeAdoption.csv") 
+
+# Manual
+library(nlme)
+DistrictCumulativeAdoption100=nlsList(cumulative_percent~100/(1 + exp(-(a + b*herbi_1st_use))),start=list(a = 1, b = 0),
+                                      data=groupedData(cumulative_percent~herbi_1st_use|A.q103_district,DistrictCumulativeAdoption),na.action=na.omit)
+summary(DistrictCumulativeAdoption100)
+alphaDistrictCumulativeAdoption100 <- coef(DistrictCumulativeAdoption100) 
+write.csv(alphaDistrictCumulativeAdoption100, file = "alphaDistrictCumulativeAdoption100.csv")
+
+# SSLOGIS
+SSlogDistrictCumulativeAdoption100=nlsList(cumulative_percent~SSlogis(herbi_1st_use, 100, xmid, scale),start=list( xmid=1992, scale=5),
+                                           data=groupedData(cumulative_percent~herbi_1st_use|A.q103_district,DistrictCumulativeAdoption),na.action=na.omit,pool=FALSE)
+
+summary(SSlogDistrictCumulativeAdoption100)
+
+nlssummary=summary(SSlogDistrictCumulativeAdoption100)
+
+xmid=nlssummary$coefficients[,,1]
+colnames(xmid) <- paste("xmid", colnames(xmid), sep = "_")
+scale=nlssummary$coefficients[,,2]
+colnames(scale) <- paste("xmid", colnames(scale), sep = "_")
+
+SSlogDistrictCumulativeAdoption100Results <-data.frame(coefficients(SSlogDistrictCumulativeAdoption100),xmid,scale)
+
+library(broom)
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+SSlogDistrictCumulativeAdoption100Results$Slopes=1/SSlogDistrictCumulativeAdoption100Results$scale
+
+SSlogDistrictCumulativeAdoption100Results$Intercept=-(SSlogDistrictCumulativeAdoption100Results$xmid/SSlogDistrictCumulativeAdoption100Results$scale)
+
+SSlogDistrictCumulativeAdoption100Results$Year10percent=((-2.2-SSlogDistrictCumulativeAdoption100Results$Intercept)/SSlogDistrictCumulativeAdoption100Results$Slopes)
+SSlogDistrictCumulativeAdoption100Results$Year90percent=((2.2-SSlogDistrictCumulativeAdoption100Results$Intercept)/SSlogDistrictCumulativeAdoption100Results$Slopes)
+SSlogDistrictCumulativeAdoption100Results$Years10_90=SSlogDistrictCumulativeAdoption100Results$Year90percent-SSlogDistrictCumulativeAdoption100Results$Year10percent
+
+write.csv(SSlogDistrictCumulativeAdoption100Results, file = "SSlogDistrictCumulativeAdoption100Results.csv")
+
+herbi_1st_use <- with(DistrictCumulativeAdoption, seq(2000,2030, length.out = 31))
+A.q103_district=levels(as.factor(DistrictCumulativeAdoption$A.q103_district))
+herbi_1st_use_dist=expand.grid(herbi_1st_use=herbi_1st_use,A.q103_district=A.q103_district)
+herbi_1st_use_dist$pred=predict(SSlogDistrictCumulativeAdoption100, herbi_1st_use_dist)
+herbi_1st_use_dist_Data=merge(DistrictCumulativeAdoption,herbi_1st_use_dist,by=c("A.q103_district","herbi_1st_use"),all.y=TRUE)
+
+write.csv(herbi_1st_use_dist_Data, file = "herbi_1st_use_dist_DataPredictionResults100.csv")
+
+
+Herb_adoption=subset(herbi_1st_use_dist_Data, select=c("A.q103_district","herbi_1st_use","pred") )
+
+names(Herb_adoption)[1:3]=c("Districts","year","Herb_adopt_perc")
+
+write.csv(Herb_adoption, file = "Herb_adoption.csv")
+
+
+
+# Plotting predicted herbicide adoption rates
+
+ggplot(Herb_adoption,aes(y=Herb_adopt_perc,x=year,color=Districts)) + 
+  geom_line()+
+   theme_bw()+
+  labs(y="Ädoption rate (% of farmers)")
+
+# Subset the years 2019 to 2030 and three columns 
+
+
+Herb_adoption_2019_30=subset(Herb_adoption,Herb_adoption$year%in%c(2019:2030))
+
+ggplot(Herb_adoption_2019_30,aes(y=Herb_adopt_perc,x=year,color=Districts)) + 
+  geom_line()
+
+Herb_adoption_2019_30$Districts=toupper(Herb_adoption_2019_30$Districts)
+
+APY_plus_adoption=merge(Herb_adoption_2019_30,APY_data_wheat_2019_30,by=c("Districts","year"))
+
+
+APY_plus_adoption$Area_Hectare_Herb=(APY_plus_adoption$Herb_adopt_perc/100)*APY_plus_adoption$Area_Hectare
+
+
+
+```
+
+## Step 3: Supply, demand elasticities, and prices
+
+```{r, warning=FALSE}
+APY_plus_adoption$Supply_Elast=0.22 # Taken from Kumar et al 2016
+APY_plus_adoption$Demand_Elast=0.340 # Taken from Kumar et al 2011
+
+Prices=import("tabpricedist.csv")
+
+Prices=subset(Prices,select=c("A.q103_district","mean"))
+
+names(Prices)[1:2]=c("Districts","Prices")
+
+Prices$Districts=toupper(Prices$Districts)
+
+APY_plus_adoption=merge(APY_plus_adoption,Prices,by="Districts")
+
+
+```
+
+## Step 4: Yield and cost changes due to research
+
+```{r, warning=FALSE}
+library(rio)
+Yield_changes=import("tau.hat_weeding_herb_predictions_dist.csv")
+
+Yield_changes=subset(Yield_changes,select=c("A.q103_district","mean"))
+
+names(Yield_changes)[1:2]=c("Districts","Yield_gain_t_ha")
+
+Yield_changes$Districts=toupper(Yield_changes$Districts)
+
+APY_plus_adoption=merge(APY_plus_adoption,Yield_changes,by="Districts")
+
+# cost changes
+APY_plus_adoption$Cost_changes=0
+
+```
+
+## Step 5: Research induced supply shift
+
+```{r, warning=FALSE}
+
+# K_shift_yld_compt
+
+APY_plus_adoption$K_shift_yld_compt=APY_plus_adoption$Yield_gain_t_ha/APY_plus_adoption$Supply_Elast
+
+
+# K_shift_cost_component
+APY_plus_adoption$K_shift_cost_compt=APY_plus_adoption$Cost_changes/(1+(APY_plus_adoption$Yield_gain_t_ha/APY_plus_adoption$Yield_Tonnes_Hectare))
+
+# K_shift
+APY_plus_adoption$K_shift=APY_plus_adoption$K_shift_yld_compt-APY_plus_adoption$K_shift_cost_compt
+
+APY_plus_adoption$K_shift_A=APY_plus_adoption$K_shift*APY_plus_adoption$Herb_adopt_perc*0.01
+
+# Z_t=K_t e/e+eta
+
+APY_plus_adoption$Z_t=(APY_plus_adoption$K_shift_A*APY_plus_adoption$Supply_Elast)/(APY_plus_adoption$Supply_Elast+APY_plus_adoption$Demand_Elast)
+
+
+```
+
+## Step 6: Compute producer surplus, consumer surplus and total surplus
+
+For a small closed economy, the equations producer surplus, consumer surplus and total surplus.
+
+Producer surplus
+
+$$
+\Delta PS_t = P_0Q_0 (K-Z)(1+0.5Z \eta)
+$$
+
+Consumer surplus $$
+\Delta CS_t = P_0Q_0 Z(1+0.5Z \eta)
+$$
+
+Total surplus $$
+\Delta TS_t =\Delta PS_t + \Delta CS_t 
+$$
+
+```{r, warning=FALSE}
+
+# Producer surplus
+#APY_plus_adoption$producer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*APY_plus_adoption$K_shift_A*(1-0.5*APY_plus_adoption$K_shift_A*APY_plus_adoption$Supply_Elast)
+
+APY_plus_adoption$producer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*(APY_plus_adoption$K_shift_A-APY_plus_adoption$Z_t)*(1+0.5*APY_plus_adoption$Z_t*APY_plus_adoption$Demand_Elast)
+
+APY_plus_adoption$producer_surplus_Rs_per_ha=(APY_plus_adoption$producer_surplus/APY_plus_adoption$Area_Hectare)*1000
+
+# Consumer surplus
+APY_plus_adoption$consumer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*APY_plus_adoption$Z_t*(1+0.5*APY_plus_adoption$Z_t*APY_plus_adoption$Demand_Elast)
+
+# Total surplus
+APY_plus_adoption$total_surplus=APY_plus_adoption$producer_surplus+APY_plus_adoption$consumer_surplus
+
+
+
+```
+
+### Small open economy producer surplus
+
+For a small open economy in which the state's contribution cannot affect global prices, producer surplus can be computed as: $$
+\Delta PS_t = P_0Q_0K_t(1-0.5K_t \epsilon)
+$$
+
+```{r}
+APY_plus_adoption$producer_surplus_open_econ <- APY_plus_adoption$Production_Tonnes * APY_plus_adoption$Prices * (1 - 0.5 * APY_plus_adoption$K_shift_A * APY_plus_adoption$Supply_Elast)
+
+APY_plus_adoption$producer_surplus_open_econ_Rs_per_ha <- (APY_plus_adoption$producer_surplus_open_econ / APY_plus_adoption$Area_Hectare) * 1000
+
+```
+
+## Step 7: Cost of research
+
+```{r, warning=FALSE}
+APY_plus_adoption$Cost_of_research=0
+
+```
+
+## Step 8: Compute economic indicators
+
+```{r, warning=FALSE}
+# Discount rate
+APY_plus_adoption$discount_rate <- 0.2
+
+# time
+APY_plus_adoption$time <- APY_plus_adoption$year - 2019
+
+# cashflows
+APY_plus_adoption$net_producer_surplus <- APY_plus_adoption$producer_surplus - APY_plus_adoption$Cost_of_research
+
+APY_plus_adoption$net_producer_surplus_open_econ <- APY_plus_adoption$producer_surplus_open_econ - APY_plus_adoption$Cost_of_research
+
+APY_plus_adoption$net_consumer_surplus <- APY_plus_adoption$consumer_surplus - APY_plus_adoption$Cost_of_research
+
+APY_plus_adoption$net_total_surplus <- APY_plus_adoption$total_surplus - APY_plus_adoption$Cost_of_research
+
+# Calculate the Present Value of Each Cash Flow
+APY_plus_adoption$Producer_present_value <- APY_plus_adoption$net_producer_surplus / ((1 + APY_plus_adoption$discount_rate)^APY_plus_adoption$time)
+
+APY_plus_adoption$Producer_present_value_open_econ <- APY_plus_adoption$net_producer_surplus_open_econ / ((1 + APY_plus_adoption$discount_rate)^APY_plus_adoption$time)
+
+APY_plus_adoption$Consumer_present_value <- APY_plus_adoption$net_consumer_surplus / ((1 + APY_plus_adoption$discount_rate)^APY_plus_adoption$time)
+
+APY_plus_adoption$Total_present_value <- APY_plus_adoption$net_total_surplus / ((1 + APY_plus_adoption$discount_rate)^APY_plus_adoption$time)
+
+
+# Sum all the Present Values
+library(data.table)
+APY_plus_adoption <- data.table(APY_plus_adoption)
+
+APY_plus_adoption_indic <- APY_plus_adoption[, .(
+    Producer_net_present_value_sum = base::sum(Producer_present_value, na.rm = TRUE),
+    Producer_present_value_open_econ_sum = base::sum(Producer_present_value_open_econ, na.rm = TRUE),
+    Consumer_net_present_value_sum = base::sum(Consumer_present_value, na.rm = TRUE),
+    Total_net_present_value_sum = base::sum(Total_present_value, na.rm = TRUE),
+    Wheat_area_mean = base::mean(Area_Hectare, na.rm = TRUE),
+    Area_Hectare_Herb_mean = base::mean(Area_Hectare_Herb, na.rm = TRUE),
+    Production_Tonnes_mean = base::mean(Production_Tonnes, na.rm = TRUE),
+    Yield_Tonnes_Hectare_mean = base::mean(Yield_Tonnes_Hectare, na.rm = TRUE)
+), by = .(Districts)]
+
+# Producer surplus small open economy
+APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual <- APY_plus_adoption_indic$Producer_present_value_open_econ_sum / 11
+sum(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual)
+summary(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual)
+
+APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+
+summary(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual_Rs_ha)
+
+# Producer surplus
+APY_plus_adoption_indic$Producer_net_present_value_sum_annual <- APY_plus_adoption_indic$Producer_net_present_value_sum / 11
+
+sum(APY_plus_adoption_indic$Producer_net_present_value_sum_annual)
+summary(APY_plus_adoption_indic$Producer_net_present_value_sum_annual)
+
+APY_plus_adoption_indic$Producer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+
+summary(APY_plus_adoption_indic$Producer_net_present_value_sum_annual_Rs_ha)
+
+# Consumer surplus
+APY_plus_adoption_indic$Consumer_net_present_value_sum_annual <- APY_plus_adoption_indic$Consumer_net_present_value_sum / 11
+
+sum(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual)
+summary(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual)
+
+APY_plus_adoption_indic$Consumer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Consumer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+
+summary(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual_Rs_ha)
+
+
+# Total surplus
+APY_plus_adoption_indic$Total_net_present_value_sum_annual <- APY_plus_adoption_indic$Total_net_present_value_sum / 11
+
+sum(APY_plus_adoption_indic$Total_net_present_value_sum_annual)
+summary(APY_plus_adoption_indic$Total_net_present_value_sum_annual)
+
+APY_plus_adoption_indic$Total_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Total_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+
+summary(APY_plus_adoption_indic$Total_net_present_value_sum_annual_Rs_ha)
+
+# Benefit-cost ratio
+# APY_plus_adoption$BCR=APY_plus_adoption$producer_surplus/APY_plus_adoption$Cost_of_research
+
+# Internal Rate of Return (IRR)
+
+# IRR(cf0,cf,times,plot=FALSE)
+# MIRR=
+
+# irr1 <- project1_cf %>%
+#   select(cf) %>%
+#   .[[1]] %>%
+#   irr()
+
+# Modified Internal Rate of Return (MIRR)
+
+
+
+```
+
+# Spatial visualization of the economic surpluses
+
+```{r}
+library(geodata)
+
+India <- gadm(country = "IND", level = 2, path = "shp")
+plot(India)
+
+India_aoi <- subset(India, India$NAME_1 == "Bihar")
+
+plot(India_aoi)
+
+plot(India_aoi, add = TRUE)
+
+library(sf)
+
+India_aoi_sf <- st_as_sf(India_aoi)
+library(mapview)
+
+mapview(India_aoi_sf)
+
+India_aoi_sf$Districts <- toupper(India_aoi_sf$NAME_2)
+
+APY_plus_adoption_indic_sf <- merge(India_aoi_sf, APY_plus_adoption_indic, by = "Districts")
+
+# Average wheat area
+# Using tmap
+library(tmap)
+tmap_mode("plot")
+
+Wheat_area_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Wheat_area_mean", palette = "viridis", scale = 2.5, title = "Wheat area (ha)")
+Wheat_area_sf_tmap
+
+tmap_save(Wheat_area_sf_tmap, "figures/Wheat_area_sf_tmap.png", dpi = 300, width = 4.88, height = 3.16)
+
+# Average wheat yields
+tmap_mode("plot")
+
+Wheat_yield_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Yield_Tonnes_Hectare_mean", palette = "viridis", scale = 2.5, title = "Wheat yields (t/ha)")
+Wheat_yield_sf_tmap
+
+tmap_save(Wheat_yield_sf_tmap, "figures/Wheat_yield_sf_tmap.png", dpi = 300, width = 4.88, height = 3.16)
+
+
+# Average wheat production
+tmap_mode("plot")
+
+Wheat_production_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Production_Tonnes_mean", palette = "viridis", scale = 2.5, title = "Wheat production (t)")
+Wheat_production_sf_tmap
+
+tmap_save(Wheat_production_sf_tmap, "figures/Wheat_production_sf_tmap.png", dpi = 300, width = 4.88, height = 3.16)
+
+
+
+# Producer surplus
+
+mapview(APY_plus_adoption_indic_sf, zcol = "Producer_net_present_value_sum_annual", layer.name = "Producer surplus (INR 1000)")
+
+# Using tmap
+library(tmap)
+tmap_mode("plot")
+
+prod_surplus_changes_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Producer_net_present_value_sum_annual", palette = "viridis", scale = 2.5, title = "Producer surplus (INR 1000)")
+prod_surplus_changes_sf_tmap
+
+tmap_save(prod_surplus_changes_sf_tmap, "figures/prod_surplus_changes_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+# Small open economy
+library(tmap)
+tmap_mode("plot")
+
+prod_surplus_changes_open_econ_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Producer_present_value_open_econ_sum_annual", palette = "viridis", scale = 2.5, title = "Small open economy PS (INR 1000)")
+prod_surplus_changes_open_econ_sf_tmap
+
+tmap_save(prod_surplus_changes_open_econ_sf_tmap, "figures/prod_surplus_changes_open_econ_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+
+
+# Producer surplus per ha
+# Using tmap
+library(tmap)
+tmap_mode("plot")
+
+prod_surplus_changes_perha_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Producer_net_present_value_sum_annual_Rs_ha", palette = "viridis", scale = 2.5, title = "Producer surplus per ha")
+prod_surplus_changes_perha_sf_tmap
+
+
+tmap_save(prod_surplus_changes_perha_sf_tmap, "figures/prod_surplus_changes_perha_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+## Small open economy
+library(tmap)
+tmap_mode("plot")
+
+prod_surplus_changes_open_econ_perha_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Producer_present_value_open_econ_sum_annual_Rs_ha", palette = "viridis", scale = 2.5, title = "Small open economy PS per ha")
+prod_surplus_changes_open_econ_perha_sf_tmap
+
+
+tmap_save(prod_surplus_changes_open_econ_perha_sf_tmap, "figures/prod_surplus_changes_open_econ_perha_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+
+
+mapview(APY_plus_adoption_indic_sf, zcol = "Consumer_net_present_value_sum_annual", layer.name = "Consumer surplus (INR 1000)")
+
+mapview(APY_plus_adoption_indic_sf, zcol = "Total_net_present_value_sum_annual", layer.name = "Total economic surplus (INR 1000)")
+
+
+library(reactable)
+library(htmltools)
+library(fontawesome)
+
+htmltools::browsable(
+    tagList(
+        tags$button(
+            tagList(fontawesome::fa("download"), "Download as CSV"),
+            onclick = "Reactable.downloadDataCSV('APY_plus_adoption_indic_sf', 'APY_plus_adoption_indic_sf.csv')"
+        ),
+        reactable(
+            APY_plus_adoption_indic_sf,
+            searchable = TRUE,
+            defaultPageSize = 38,
+            elementId = "APY_plus_adoption_indic_sf"
+        )
+    )
+)
+
+# Yield changes
+Yield_changes <- subset(Yield_changes, !(Yield_changes$Districts == "KISHANGANJ"))
+
+library(mapview)
+Yield_changes_sf <- merge(India_aoi_sf, Yield_changes, by = "Districts")
+
+mapview(Yield_changes_sf, zcol = "Yield_gain_t_ha", layer.name = "Yield gain to herbicides (tons per ha)")
+
+# Using tmap
+library(tmap)
+tmap_mode("plot")
+
+Yield_changes_sf_tmap <- tm_shape(Yield_changes_sf) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "Yield_gain_t_ha", palette = "viridis", scale = 2.5, title = "Yield gain to herbicides (tons per ha)")
+Yield_changes_sf_tmap
+
+tmap_save(Yield_changes_sf_tmap, "figures/Yield_changes_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+
+
+library(reactable)
+library(htmltools)
+library(fontawesome)
+
+htmltools::browsable(
+    tagList(
+        tags$button(
+            tagList(fontawesome::fa("download"), "Download as CSV"),
+            onclick = "Reactable.downloadDataCSV('Yield_changes_sf', 'Yield_changes_sf.csv')"
+        ),
+        reactable(
+            Yield_changes_sf,
+            searchable = TRUE,
+            defaultPageSize = 38,
+            elementId = "Yield_changes_sf"
+        )
+    )
+)
+
+```
+
+# Conclusion
+
+The notebook has demonstrated the workflow for calculating spatially disaggregated economic surplus measures that can be used to target and prioritize agricultural interventions.
+
+# References
+
+Alston, J.M., Norton, G.W., and Pardey, P.G. 1995. "Science under scarcity: Principles and practice for agricultural research evaluation and priority setting." CAB International. Wallingford, UK.
