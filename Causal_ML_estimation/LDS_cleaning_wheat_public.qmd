@@ -1,0 +1,864 @@
+---
+title: "LDS Data Manipulation for Spatial Exante Analytics"
+format: html
+fig-dpi: 300
+fig-width: 8.88
+fig-align: center
+fig-height: 5
+
+self-contained: true
+author: Maxwell Mkondiwa
+editor: visual
+toc: true
+toc-location: left
+number-sections: true
+execute: 
+  message: false
+  warning: false
+  echo: true
+---
+
+# Introduction
+
+In this workbook, we show how the data manipulation steps for the LCAS data to do spatial exante analytics. The data manipulation steps include: (a) variable construction, (b) combine the LCAS with geovariables, e.g., soil grids, and (c) combine the LCAS to climate variables. We then show an interactive table that shows the merged data. We then use the data as inputs in subsequent spatial exante workflows.
+
+We first clear the working, load all the packages and import the data from dataverse. The data is on CIMMYT CSISA dataverse: https://data.cimmyt.org/dataset.xhtml?persistentId=hdl:11529/10548507. To download the data, we use "agro'' R package.
+
+```{r, message=FALSE}
+rm(list=ls())         # clear 
+
+library(sp)
+library(dplyr)
+library(rio)
+library(readxl)
+library(tidyr)
+
+## Loading required package: agro
+if (!require(agro))  source("https://install-github.me/reagro/agro")
+
+ff <- agro::get_data_from_uri("hdl:11529/10548507", ".")
+ff
+
+LDS <- read.csv("./hdl_11529_10548507/CSISA_IND_LDS_Whe_2018_Data.csv", stringsAsFactors=FALSE)
+
+```
+
+# Variable construction
+
+```{r}
+# Conversions
+
+LDS$C.q306_cropLarestAreaHA=LDS$C.q306_cropLarestAreaAcre*0.405 #acre to ha
+LDS$yield_kgperha=LDS$L.tonPerHectare*1000                      #t/ha to kg per ha
+LDS$L.q607_farmGatePricePerKg=LDS$L.q607_farmGatePrice/100      # convert to price per kg
+
+# Calculate N, P applied
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="10_26_26"]=0.10
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="12_32_16"]=0.12
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="14_35_14"]=0.14
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="Other20-13-13"]=0.20
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="Other20-20-0-13"]=0.20
+LDS$F.q51071_gradeNPKN[LDS$F.q51071_gradeNPK=="Other20-20-13"]=0.20
+LDS$F.q51071_gradeNPKN=as.numeric(LDS$F.q51071_gradeNPKN)
+
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="10_26_26"]=0.26
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="12_32_16"]=0.32
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="14_35_14"]=0.35
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="Other20-13-13"]=0.13
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="Other20-20-0-13"]=0.20
+LDS$F.q51071_gradeNPKP[LDS$F.q51071_gradeNPK=="Other20-20-13"]=0.20
+LDS$F.q51071_gradeNPKP=as.numeric(LDS$F.q51071_gradeNPKP)
+
+LDS$F.q51071_gradeNPKK[LDS$F.q51071_gradeNPK=="10_26_26"]=0.26
+LDS$F.q51071_gradeNPKK[LDS$F.q51071_gradeNPK=="12_32_16"]=0.16
+LDS$F.q51071_gradeNPKK[LDS$F.q51071_gradeNPK=="14_35_14"]=0.14
+LDS$F.q51071_gradeNPKK[LDS$F.q51071_gradeNPK=="Other20-13-13"]=0.13
+LDS$F.q51071_gradeNPKK[LDS$F.q51071_gradeNPK=="Other20-20-13"]=0.13
+LDS$F.q51071_gradeNPKK=as.numeric(LDS$F.q51071_gradeNPKK)
+
+# NPKS -----------
+LDS$F.q51211_gradeNPKSN[LDS$F.q51211_gradeNPKS=="16_20_0_13"]=0.16
+LDS$F.q51211_gradeNPKSN[LDS$F.q51211_gradeNPKS=="20_20_0_13"]=0.20
+LDS$F.q51211_gradeNPKSN=as.numeric(LDS$F.q51211_gradeNPKSN)
+
+LDS$F.q51211_gradeNPKSP[LDS$F.q51211_gradeNPKS=="16_20_0_13"]=0.16
+LDS$F.q51211_gradeNPKSP[LDS$F.q51211_gradeNPKS=="20_20_0_13"]=0.20
+LDS$F.q51211_gradeNPKSP=as.numeric(LDS$F.q51211_gradeNPKSP)
+
+LDS$F.q51211_gradeNPKSK[LDS$F.q51211_gradeNPKS=="16_20_0_13"]=0.16
+LDS$F.q51211_gradeNPKSK[LDS$F.q51211_gradeNPKS=="20_20_0_13"]=0.20
+LDS$F.q51211_gradeNPKSK=as.numeric(LDS$F.q51211_gradeNPKSK)
+
+LDS$F.q51211_gradeNPKSS[LDS$F.q51211_gradeNPKS=="16_20_0_13"]=0.13
+LDS$F.q51211_gradeNPKSS[LDS$F.q51211_gradeNPKS=="20_20_0_13"]=0.13
+LDS$F.q51211_gradeNPKSS=as.numeric(LDS$F.q51211_gradeNPKSS)
+
+# Nutrient Content ----------------------
+# Taken from Cedrez, Chamberlain, Guo and Hijmans, p3
+### N -----------------------------------
+LDS$F.totAmtDAPN=LDS$F.totAmtDAP*0.18 
+LDS$F.totAmtUreaN=LDS$F.totAmtUrea*0.46
+LDS$F.totAmtNPKN=LDS$F.totAmtNPK*LDS$F.q51071_gradeNPKN
+LDS$F.totAmtTSPN=LDS$F.totAmtTSP*0
+LDS$F.totAmtSSPN=LDS$F.totAmtSSP*0
+LDS$F.totAmtNPKSN=LDS$F.totAmtNPKS*LDS$F.q51211_gradeNPKSN
+
+LDS$N=rowSums(LDS[,c("F.totAmtDAPN","F.totAmtUreaN","F.totAmtNPKN","F.totAmtTSPN","F.totAmtSSPN","F.totAmtNPKSN")],na.rm = TRUE)
+LDS$Nperha=LDS$N/LDS$C.q306_cropLarestAreaHA
+LDS$NperhaSq=LDS$Nperha*LDS$Nperha
+
+### P ------------------------------------
+LDS$F.totAmtDAPP=LDS$F.totAmtDAP*0.46
+LDS$F.totAmtUreaP=LDS$F.totAmtUrea*0
+LDS$F.totAmtNPKP=LDS$F.totAmtNPK*LDS$F.q51071_gradeNPKP
+LDS$F.totAmtTSPP=LDS$F.totAmtTSP*0.45
+LDS$F.totAmtSSPP=LDS$F.totAmtSSP*0.2
+LDS$F.totAmtNPKSP=LDS$F.totAmtNPKS*LDS$F.q51211_gradeNPKSP
+
+LDS$P2O5=rowSums(LDS[,c("F.totAmtDAPP","F.totAmtUreaP","F.totAmtNPKP","F.totAmtTSPP","F.totAmtSSPP","F.totAmtNPKSP")],na.rm = TRUE)
+LDS$P2O5perha=LDS$P2O5/LDS$C.q306_cropLarestAreaHA
+
+# Creating dummy variables ------------------------
+LDS$A.q111_fGenderdum[LDS$A.q111_fGender=="female"]=1
+LDS$A.q111_fGenderdum[LDS$A.q111_fGender=="male"]=0
+
+varieties=read.csv("LDS wheat variety maturity class.csv")
+LDS=merge(LDS,varieties, by="D.q410_varName",all.x=TRUE)
+LDS$variety_type_NMWV[LDS$variety_type=="NMWV"]=1
+LDS$variety_type_NMWV[LDS$variety_type=="EMWV"]=0
+LDS$variety_type_NMWV=as.numeric(LDS$variety_type_NMWV)
+
+# Sowing time new --------------------------------------------------------------
+LDS$Sowdate=LDS$D.seedingSowingTransplanting
+library(tidyr)
+LDS=LDS %>% separate(Sowdate, c("Sday","Smonth", "Syear"))
+table(LDS$Sday)
+table(LDS$Smonth)
+table(LDS$Syear)
+
+LDS$Smonth_issues=0
+
+LDS$Smonth_issues[LDS$Smonth%in%c("11","12","14","15","17","18","20",
+                          "22","23","24","25","26","27","29")]=1
+LDS$Smonth[LDS$Smonth%in%c("11","12","14","15","17","18","20","22","23","24","25","26","27","29")]="Nov"
+
+LDS$Sday[LDS$Smonth_issues%in%c(1)]=LDS$Smonth[LDS$Smonth_issues%in%c(1)]          
+LDS$Syear[LDS$Syear==17]=2017
+LDS$Syear[LDS$Syear==18]=2018
+LDS$Syear[LDS$Syear==19]=2019
+
+LDS$SowDate_Cleaned=paste(LDS$Sday,LDS$Smonth,LDS$Syear, sep="/")
+
+library(anytime)
+LDS$SowDate_Cleaned_Datefmt=anydate(LDS$SowDate_Cleaned)
+
+library(lubridate)
+LDS <- LDS %>%
+  mutate(., Sowing_week = floor_date(SowDate_Cleaned_Datefmt, unit = "week"))
+library(ggplot2)
+
+SowingDates_2017_2019=ggplot(LDS, aes(x=factor(Sowing_week)))+
+  geom_bar(stat="count", width=0.7, fill="steelblue")+
+  theme_minimal()+
+  labs(x="Sowing week")+
+  coord_flip()
+SowingDates_2017_2019
+
+#ggsave("figures/SowingDates_2017_2019.png", dpi=300)
+
+# Rabi season
+LDS$Rabi2017_18=0
+LDS$Rabi2017_18[LDS$SowDate_Cleaned_Datefmt< "2018-06-01"]=1
+LDS$Sowing_Date_Early=0
+LDS$Sowing_Date_Early[LDS$SowDate_Cleaned_Datefmt<"2017-11-21" & LDS$Rabi2017_18==1]=1
+LDS$Sowing_Date_Early[LDS$SowDate_Cleaned_Datefmt<"2018-11-21" & LDS$Rabi2017_18==0]=1
+
+# Harvesting time --------------------------------------------------------------
+LDS$PrevCropHarvDate=LDS$D.pCHarv
+LDS=LDS %>% separate(PrevCropHarvDate, c("Hday","Hmonth", "Hyear"))
+LDS$Hyear[LDS$Hyear==17]=2017
+LDS$Hyear[LDS$Hyear==18]=2018
+LDS$Hyear[LDS$Hyear==19]=2019
+
+LDS$Hmonthnum[LDS$Hmonth=="Jan"]=1
+LDS$Hmonthnum[LDS$Hmonth=="Apr"]=4
+LDS$Hmonthnum[LDS$Hmonth=="Jun"]=6
+LDS$Hmonthnum[LDS$Hmonth=="Jul"]=7
+LDS$Hmonthnum[LDS$Hmonth=="Aug"]=8
+LDS$Hmonthnum[LDS$Hmonth=="Sep"]=9
+LDS$Hmonthnum[LDS$Hmonth=="Oct"]=10
+LDS$Hmonthnum[LDS$Hmonth=="Nov"]=11
+LDS$Hmonthnum[LDS$Hmonth=="Dec"]=12
+
+LDS$Hdaynum=as.numeric(LDS$Hday)
+LDS$Hmonthnum=as.numeric(LDS$Hmonthnum)
+LDS$Hyearnum=as.numeric(LDS$Hyear)
+
+library(lubridate)
+LDS <- LDS %>% 
+  mutate(PrevCropHarvest_date_cleaned=make_date(year=Hyearnum,month=Hmonthnum,day=Hdaynum))
+
+LDS$JanuaryFirst2017=ymd("2017-01-01")
+LDS$JanuaryFirst2018=ymd("2018-01-01")
+LDS$JanuaryFirst2019=ymd("2019-01-01")
+
+LDS$PrevCropHarvestDayfor1stJan2017<- LDS$PrevCropHarvest_date_cleaned - LDS$JanuaryFirst2017
+LDS$PrevCropHarvestDayfor1stJan2018<- LDS$PrevCropHarvest_date_cleaned - LDS$JanuaryFirst2018
+LDS$PrevCropHarvestDayfor1stJan2019<- LDS$PrevCropHarvest_date_cleaned - LDS$JanuaryFirst2019
+
+LDS$PrevCropHarvestDayfor1stJan2017_num=as.numeric(LDS$PrevCropHarvestDayfor1stJan2017)
+LDS$PrevCropHarvestDayfor1stJan2018_num=as.numeric(LDS$PrevCropHarvestDayfor1stJan2018)
+LDS$PrevCropHarvestDayfor1stJan2019_num=as.numeric(LDS$PrevCropHarvestDayfor1stJan2019)
+
+LDS$PrevCropHarvestDayfor1stJan2017[LDS$PrevCropHarvestDayfor1stJan2017<0 | LDS$PrevCropHarvestDayfor1stJan2017>365]=0
+LDS$PrevCropHarvestDayfor1stJan2018[LDS$PrevCropHarvestDayfor1stJan2018<0 | LDS$PrevCropHarvestDayfor1stJan2018>365]=0
+LDS$PrevCropHarvestDayfor1stJan2019[LDS$PrevCropHarvestDayfor1stJan2019<0 | LDS$PrevCropHarvestDayfor1stJan2019>365]=0
+
+LDS$PrevCropHarvestDay=LDS$PrevCropHarvestDayfor1stJan2017+LDS$PrevCropHarvestDayfor1stJan2018+LDS$PrevCropHarvestDayfor1stJan2019
+
+LDS$PrevCropHarvestDay=as.numeric(LDS$PrevCropHarvestDay)
+
+# Irrigation
+LDS$G.q5301_irrigAvail[LDS$G.q5301_irrigAvail=="Yes"]="yes"
+LDS$G.q5301_irrigAvail_dum[LDS$G.q5301_irrigAvail=="yes"]=1
+LDS$G.q5301_irrigAvail_dum[LDS$G.q5301_irrigAvail=="no"]=0
+LDS$G.q5305_irrigTimes_onevsall[LDS$G.q5305_irrigTimes==1]=1
+LDS$G.q5305_irrigTimes_onevsall[LDS$G.q5305_irrigTimes>=2]=0
+LDS$G.q5305_irrigTimes_twovs1[LDS$G.q5305_irrigTimes==2]=1
+LDS$G.q5305_irrigTimes_twovs1[LDS$G.q5305_irrigTimes==1]=0
+LDS$G.q5305_irrigTimes_threevs1[LDS$G.q5305_irrigTimes==3]=1
+LDS$G.q5305_irrigTimes_threevs1[LDS$G.q5305_irrigTimes==1]=0
+LDS$G.q5305_irrigTimes_fourplusvs1[LDS$G.q5305_irrigTimes>=4]=1
+LDS$G.q5305_irrigTimes_fourplusvs1[LDS$G.q5305_irrigTimes==1]=0
+# Less than 2 versus more irrigation
+LDS$G.q5305_irrigTimes_Threeabove[LDS$G.q5305_irrigTimes>=3]=1
+LDS$G.q5305_irrigTimes_Threeabove[LDS$G.q5305_irrigTimes<=2]=0
+
+library(stringr)
+library(dplyr)
+
+LDS$IrrigSource=NA
+LDS$IrrigSource[LDS$G.q5302_irrigSource%in%c("canal","Canal","Canal Other","Canal Pond","Canal Pond Lift","Canal Lift","Pond Dugwell Tank","Pond Lift","River", "River Canal"," River Canal Lift","River Canal Pond")]="Surface"
+
+LDS$IrrigSource[LDS$G.q5302_irrigSource%in%c("Shallow Tubewell","shallowTubeWell","Shallow TubeWell","ShallowTubewell","ShallowTubeWell","ShallowTubeWell","ShallowTubeWell Dugwell","ShallowTubeWell Lift","ShallowTubeWell Other","ShallowTubeWell Tank")]="ShallowTubewell"
+
+LDS$IrrigSource[LDS$G.q5302_irrigSource%in%c("Deep Tubewell","DeepTubewel","DeepTubewell","DeepTubeWell","DeepTubeWell Dugwell")]="DeepTubeWell"
+
+LDS$IrrigSource[LDS$G.q5302_irrigSource%in%c("Canal Pond DeepTubeWell","","Pond DeepTubeWell","Pond ShallowTubeWell","River Canal DeepTubeWell","River Canal ShallowTubeWell")]="Conjuctive"
+
+LDS$IrrigSource[LDS$G.q5301_irrigAvail%in%c("no")]="None"
+
+# Energy source 
+LDS$PumpEnergySource=LDS$H.q5406_pumpEnergy
+LDS$PumpEnergySource[LDS$PumpEnergySource=="Dielsel"]="Diesel"
+LDS$PumpEnergySource[LDS$PumpEnergySource==""]=NA
+
+LDS$PumpEnergySource <- relevel(factor(LDS$PumpEnergySource), ref = "Diesel")
+LDS$I.q5502_droughtSeverity<-relevel(factor(LDS$I.q5502_droughtSeverity), ref = "None")
+LDS$IrrigSource<-relevel(factor(LDS$IrrigSource), ref = "None")
+
+# Weed management ---------------------
+LDS$Weedmanaged[LDS$J.manualWeedTimes!=0 | LDS$J.herbAppTimes!=0]=1
+LDS$Weedmanaged[LDS$J.manualWeedTimes==0 & LDS$J.herbAppTimes==0]=0
+LDS$Weedherb[LDS$J.herbAppTimes!=0]=1
+LDS$Weedherb[LDS$J.herbAppTimes==0]=0
+LDS$Weedmanual[LDS$J.manualWeedTimes!=0]=1
+LDS$Weedmanual[LDS$J.manualWeedTimes==0]=0
+
+LDS$variety_type_NMWV=as.numeric(LDS$variety_type_NMWV)
+
+LDS$I.q5505_weedSeverity_num[LDS$I.q5505_weedSeverity=="None"]=1
+LDS$I.q5505_weedSeverity_num[LDS$I.q5505_weedSeverity=="Low"]=2
+LDS$I.q5505_weedSeverity_num[LDS$I.q5505_weedSeverity=="Medium"]=3
+LDS$I.q5505_weedSeverity_num[LDS$I.q5505_weedSeverity=="High"]=4
+
+LDS$I.q5506_insectSeverity_num[LDS$I.q5506_insectSeverity=="None"]=1
+LDS$I.q5506_insectSeverity_num[LDS$I.q5506_insectSeverity=="Low"]=2
+LDS$I.q5506_insectSeverity_num[LDS$I.q5506_insectSeverity=="Medium"]=3
+LDS$I.q5506_insectSeverity_num[LDS$I.q5506_insectSeverity=="High"]=4
+
+LDS$I.q5509_diseaseSeverity_num[LDS$I.q5509_diseaseSeverity=="None"]=1
+LDS$I.q5509_diseaseSeverity_num[LDS$I.q5509_diseaseSeverity=="Low"]=2
+LDS$I.q5509_diseaseSeverity_num[LDS$I.q5509_diseaseSeverity=="Medium"]=3
+LDS$I.q5509_diseaseSeverity_num[LDS$I.q5509_diseaseSeverity=="High"]=4
+
+LDS$I.q5504_floodSeverity_num[LDS$I.q5504_floodSeverity=="None"]=1
+LDS$I.q5504_floodSeverity_num[LDS$I.q5504_floodSeverity=="Low"]=2
+LDS$I.q5504_floodSeverity_num[LDS$I.q5504_floodSeverity=="Medium"]=3
+LDS$I.q5504_floodSeverity_num[LDS$I.q5504_floodSeverity=="High"]=4
+
+LDS$I.q5502_droughtSeverity_num[LDS$I.q5502_droughtSeverity=="None"]=1
+LDS$I.q5502_droughtSeverity_num[LDS$I.q5502_droughtSeverity=="Low"]=2
+LDS$I.q5502_droughtSeverity_num[LDS$I.q5502_droughtSeverity=="Medium"]=3
+LDS$I.q5502_droughtSeverity_num[LDS$I.q5502_droughtSeverity=="High"]=4
+
+LDS$D.prevCrop_Fallow[LDS$D.prevCrop=="Fallow"]=1
+LDS$D.prevCrop_Fallow[LDS$D.prevCrop!="Fallow"]=0
+
+LDS$D.prevCrop_Rice[LDS$D.prevCrop=="Rice"]=1
+LDS$D.prevCrop_Rice[LDS$D.prevCrop!="Rice"]=0
+
+LDS$Nperha_100belowvsabove[LDS$Nperha>=100]=1
+LDS$Nperha_100belowvsabove[LDS$Nperha<100]=0
+
+LDS$Nperha_100belowvs100_150[LDS$Nperha>=100 & LDS$Nperha<=150]=1
+LDS$Nperha_100belowvs100_150[LDS$Nperha<100]=0
+
+LDS$Nperha_100belowvs150_200[LDS$Nperha>=150 & LDS$Nperha<=200]=1
+LDS$Nperha_100belowvs150_200[LDS$Nperha<100]=0
+
+LDS$Nperha_100belowvs200_250[LDS$Nperha>=200 &LDS$Nperha<=250]=1
+LDS$Nperha_100belowvs200_250[LDS$Nperha<100]=0
+
+LDS$Nperha_100belowvs200plus[LDS$Nperha>=200]=1
+LDS$Nperha_100belowvs200plus[LDS$Nperha<100]=0
+
+
+# Education
+LDS$A.q112_fEdu_new=LDS$A.q112_fEdu
+
+LDS$A.q112_fEdu_new[LDS$A.q112_fEdu_new=="masters"]="Postgrad"
+LDS$A.q112_fEdu_new[LDS$A.q112_fEdu_new=="phD"]="Postgrad"
+
+
+## Creating the key explanatory variables
+
+### Sowing --------------------------------------------------
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt<="2017-11-10" & LDS$Rabi2017_18==1]="T1_10Nov"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt<="2018-11-21" & LDS$Rabi2017_18==0]="T1_10Nov"
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2017-11-11"& LDS$SowDate_Cleaned_Datefmt<="2017-11-20" & LDS$Rabi2017_18==1]="T2_20Nov"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2018-11-11"& LDS$SowDate_Cleaned_Datefmt<="2018-11-20" & LDS$Rabi2017_18==0]="T2_20Nov"
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2017-11-21"& LDS$SowDate_Cleaned_Datefmt<="2017-11-30" & LDS$Rabi2017_18==1]="T3_30Nov"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2018-11-21"& LDS$SowDate_Cleaned_Datefmt<="2018-11-30" & LDS$Rabi2017_18==0]="T3_30Nov"
+
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2017-12-1"& LDS$SowDate_Cleaned_Datefmt<="2017-12-15" & LDS$Rabi2017_18==1]="T4_15Dec"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2018-12-1"& LDS$SowDate_Cleaned_Datefmt<="2018-12-15" & LDS$Rabi2017_18==0]="T4_15Dec"
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2017-12-1"& LDS$SowDate_Cleaned_Datefmt<="2017-12-15" & LDS$Rabi2017_18==1]="T4_15Dec"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2018-12-1"& LDS$SowDate_Cleaned_Datefmt<="2018-12-15" & LDS$Rabi2017_18==0]="T4_15Dec"
+
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2017-12-16" & LDS$Rabi2017_18==1]="T5_16Dec"
+LDS$Sowing_Date_Schedule[LDS$SowDate_Cleaned_Datefmt>="2018-12-16" & LDS$Rabi2017_18==0]="T5_16Dec"
+
+table(LDS$Sowing_Date_Schedule,LDS$Rabi2017_18)
+summary(LDS$Sowing_Date_Schedule)
+
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T5_16Dec"]=1
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T4_15Dec"]=2
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T3_30Nov"]=3
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T2_20Nov"]=4
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T1_10Nov"]=5
+
+LDS$Sowing_Date_Schedule=ordered(LDS$Sowing_Date_Schedule,levels=c("T5_16Dec","T4_15Dec","T3_30Nov","T2_20Nov","T1_10Nov"))
+
+
+# Irrigation management -------------------------------
+table(LDS$G.q5305_irrigTimes)
+LDS$G.q5305_irrigTimes_cat[LDS$G.q5305_irrigTimes==1]="One"
+LDS$G.q5305_irrigTimes_cat[LDS$G.q5305_irrigTimes == 2] <- "Two"
+LDS$G.q5305_irrigTimes_cat[LDS$G.q5305_irrigTimes == 3] <- "Three"
+LDS$G.q5305_irrigTimes_cat[LDS$G.q5305_irrigTimes >= 4] <- "Fourplus"
+table(LDS$G.q5305_irrigTimes_cat)
+
+LDS$G.q5305_irrigTimes_cat <- ordered(LDS$G.q5305_irrigTimes_cat, levels = c("One", "Two", "Three","Fourplus"))
+
+
+```
+
+# Geovariables
+
+The survey data contains approximate GPS locations of the plots. We can use these to extract soil and climate variables that are then included in crop response function.
+
+```{r}
+
+# Function to add Geo-variables 
+
+library(sf)
+library(sp)
+library(terra)
+library(raster)
+library(geodata)
+
+# add_secondary_lcas <- function (df) {
+#   # Remove duplicates and NAs in geo-coordinates
+#   #df=subset(df,!(duplicated(df$O.largestPlotGPS.Longitude)))
+#   #df=subset(df,!(duplicated(df$O.largestPlotGPS.Latitude)))
+#   df=subset(df,!(is.na(df$O.largestPlotGPS.Longitude)))
+#   df=subset(df,!(is.na(df$O.largestPlotGPS.Latitude)))
+#   df_sp= SpatialPointsDataFrame(cbind(df$O.largestPlotGPS.Longitude,df$O.largestPlotGPS.Latitude),data=df,proj4string=CRS("+proj=longlat +datum=WGS84"))
+#   df_sf=st_as_sf(df_sp)
+# 
+#   population=population(2020,05,path=tempdir())
+#   population_geodata=terra::extract(population,vect(df_sf),fun=mean,df=TRUE)
+#   elevationglobal_geodata=elevation_global(0.5,path=tempdir())
+#   elevation_geodata=terra::extract(elevationglobal_geodata,vect(df_sf),fun=mean,df=TRUE)
+#   Soilsand=soil_world("sand",depth=5,path=tempdir())
+#   Soilsand_lds=terra::extract(Soilsand,vect(df_sf),fun=mean,df=TRUE)
+#   Totalnitrogen=soil_world("nitrogen",depth=5,path=tempdir())
+#   Totalnitrogen_lds=terra::extract(Totalnitrogen,vect(df_sf),fun=mean,df=TRUE)
+#   soilsoc=soil_world("soc",depth=15,path=tempdir())
+#   soilsoc_lds=terra::extract(soilsoc,vect(df_sf),fun=mean,df=TRUE)
+# 
+#   # Merge all soils and population
+#   geodata_df <- list(population_geodata,elevation_geodata,Soilsand_lds,Totalnitrogen_lds,soilsoc_lds)
+#   geodata_df=Reduce(function(x, y) merge(x, y, all=TRUE),geodata_df)
+#   #geodata_df=return(data.frame(geodata_df))
+#   write.csv(geodata_df,paste0("geovariables",".csv"))
+#   }
+# add_secondary_lcas(LDS)
+library(rio)
+geovariables=import("geovariables.csv")
+LDS=cbind(LDS,geovariables)
+
+
+
+```
+
+# Climate variables
+
+The geodata R package has aggregated rainfall and temperature variables. However, we need climate variables specific to the corresponding growing season.
+
+```{r}
+library(ncdf4)
+library(raster)
+library(terra)
+library(sf)
+library(data.table)
+library(exactextractr)
+
+
+#RUN ONCE
+#  add_temp_precip_lcas <- function (df) {
+#    # Remove duplicates and NAs in geo-coordinates
+#    #df=subset(df,!(duplicated(df$O.largestPlotGPS.Longitude)))
+#    #df=subset(df,!(duplicated(df$O.largestPlotGPS.Latitude)))
+#    df=subset(df,!(is.na(df$O.largestPlotGPS.Longitude)))
+#    df=subset(df,!(is.na(df$O.largestPlotGPS.Latitude)))
+#    df_sp= SpatialPointsDataFrame(cbind(df$O.largestPlotGPS.Longitude,df$OlargestPlotGPS.Latitude),data=df,proj4string=CRS("+proj=longlat +datum=WGS84"))
+#    
+#    df_sf=st_as_sf(df_sp)
+#    version = "501"
+#    start.yr = 1960
+#    num.yrs = ifelse(version=="501", (2017-start.yr+1), (2010-start.yr+1))
+#    udel.temp.filename = paste0("air.mon.mean.v",version,".nc")
+#    udel.precip.filename = paste0("precip.mon.total.v",version,".nc")
+#    # Output location to write results to
+#    out.filename = paste0("UDel.aggregated.public.v",version,".csv")
+#    out.filename2017 = paste0("UDel.aggregated2017.public.v",version,".csv")
+#    yr.offset = start.yr-1900
+#    temps = subset(brick(udel.temp.filename), (yr.offset*12+1):(12*(yr.offset+num.yrs)))
+#    precip = subset(brick(udel.precip.filename), (yr.offset*12+1):(12*(yr.offset+num.yrs)))
+#    # 1. Aggregate across months within a year:  mean for temp, sum for precip
+#    annual.temps = stackApply(temps, indices = rep(1:num.yrs, each=12), fun=mean)
+#    annual.precip = stackApply(precip, indices = rep(1:num.yrs, each=12), fun=sum)
+#    # 2. Aggregate spatially.
+#    annual.temps = rotate(annual.temps)
+#    annual.precip = rotate(annual.precip)
+# 
+#    df_sf$idmatching=1:nrow(df_sf)
+# 
+#    # Aggregate temperatures
+#    ctry.temps = rbindlist(lapply(1:num.yrs, FUN=function(yr) {
+#    ctry.temps = extract(annual.temps[[yr]], df_sf)
+#    # Create data.table of results for this year, including the year
+#    return(data.table(hhid=df_sf$idmatching, temp=ctry.temps, yr=yr-1+start.yr))
+#  }))
+# 
+#    #Aggregate precipitation
+#    # Note here we're going to multiply precip data by 10.
+#    # The UDel data is in cm/year, but Burke et al use mm/year.
+#    ctry.precip = rbindlist(lapply(1:num.yrs, FUN=function(yr) {
+#    cropped.precip = annual.precip[[yr]]*10
+#    ctry.precip = extract(cropped.precip, df_sf)
+#    # Create data.table of results for this year, including the year
+#    return(data.table(hhid=df_sf$idmatching, precip=ctry.precip, yr=yr-1+start.yr))
+#  }))
+# 
+#  # Combine these results and save
+#    all.udel.data = merge(ctry.temps, ctry.precip, by=c("hhid", "yr"))
+#    all.udel.data_2017=subset(all.udel.data,all.udel.data$yr=="2017")
+#    fwrite(all.udel.data, out.filename)
+#    fwrite(all.udel.data_2017, out.filename2017)
+#  }
+# 
+# add_temp_precip_lcas(LDS)
+
+## Temperature and Rainfall -------------------
+tempprecip=read.csv("UDel.aggregated2017.public.v501.csv")
+tempprecipall=read.csv("UDel.aggregated.public.v501.csv")
+
+tempprecipallwide=reshape(tempprecipall, direction = "wide", idvar = "hhid", timevar = "yr")
+
+tempprecipallwide_small=subset(tempprecipallwide, select=c("precip.2007","temp.2008","precip.2008",
+"temp.2009","precip.2009","temp.2010","precip.2010","temp.2011","precip.2011","temp.2012","precip.2012",
+"temp.2013","precip.2013","temp.2014","precip.2014","temp.2015","precip.2015","temp.2016","precip.2016","temp.2017","precip.2017"))
+
+LDS=cbind(LDS,tempprecip,tempprecipallwide_small)
+
+# Interactive table of the data
+
+
+
+```
+
+# Month specific climate vars
+
+```{r}
+
+
+# load the `ncdf4` and the `CFtime` packages
+library(ncdf4)
+library(lattice)
+library(RColorBrewer)
+library(rasterVis)
+library(raster)
+library(colorspace)
+library(RColorBrewer)
+library(ggplot2)
+library(ggpubr)
+library(reshape2)
+library(tidyverse)
+library(ggtext)
+library(plyr)
+library(terra)
+library(rio)
+library(terra)
+library(sf)
+
+# prec
+Prec_monthly_2016 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2016.tif")
+
+Prec_monthly_2017 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2017.tif")
+
+Prec_monthly_2018 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2018.tif")
+
+Prec_monthly_2019 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2019.tif")
+
+Prec_monthly_2020 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2020.tif")
+
+Prec_monthly_2021 <- rast("EUP_Bihar_CHIRPSClimatedata/Prec_monthly_2021.tif")
+
+# tmin
+Tmin_monthly_2016 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2016.tif")
+
+Tmin_monthly_2017 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2017.tif")
+
+Tmin_monthly_2018 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2018.tif")
+
+Tmin_monthly_2019 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2019.tif")
+
+Tmin_monthly_2020 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2020.tif")
+
+Tmin_monthly_2021 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmin_monthly_2021.tif")
+
+
+# tmax
+Tmax_monthly_2016 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2016.tif")
+
+Tmax_monthly_2017 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2017.tif")
+
+Tmax_monthly_2018 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2018.tif")
+
+Tmax_monthly_2019 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2019.tif")
+
+Tmax_monthly_2020 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2020.tif")
+
+Tmax_monthly_2021 <- rast("EUP_Bihar_CHIRPSClimatedata/Tmax_monthly_2021.tif")
+
+rasterlist <- list(Prec_monthly_2016, Prec_monthly_2017, Prec_monthly_2018, Prec_monthly_2019, Prec_monthly_2020, Prec_monthly_2021, Tmin_monthly_2016, Tmin_monthly_2017, Tmin_monthly_2018, Tmin_monthly_2019, Tmin_monthly_2020, Tmin_monthly_2021, Tmax_monthly_2016, Tmax_monthly_2017, Tmax_monthly_2018, Tmax_monthly_2019, Tmax_monthly_2020, Tmax_monthly_2021)
+
+# rasterlist_stack <- raster::stark(rasterlist)
+
+LDS$Latitude <- LDS$O.largestPlotGPS.Latitude
+LDS$Longitude <- LDS$O.largestPlotGPS.Longitude
+
+LDS$Longitude <- as.numeric(LDS$Longitude)
+LDS$Latitude <- as.numeric(LDS$Latitude)
+
+LDS <- subset(LDS, !(is.na(LDS$Longitude)))
+LDS <- subset(LDS, !(is.na(LDS$Latitude)))
+
+LDS_sp <- SpatialPointsDataFrame(cbind(LDS$Longitude, LDS$Latitude), data = LDS, proj4string = CRS("+proj=longlat +datum=WGS84"))
+
+LDS_sf <- st_as_sf(LDS_sp)
+
+# temp_prec_extract <- terra::extract(rasterlist_stack, LDS_sf, fun = mean, df = TRUE)
+```
+
+## Prec, min and max
+
+```{r}
+# Function to add Geo-variables
+
+library(sf)
+library(sp)
+library(terra)
+library(raster)
+library(geodata)
+
+library(tidyverse)
+library(rio)
+
+LDS$Latitude <- LDS$O.largestPlotGPS.Latitude
+LDS$Longitude <- LDS$Longitude
+
+LDS$Longitude <- as.numeric(LDS$Longitude)
+LDS$Latitude <- as.numeric(LDS$Latitude)
+LDS <- subset(LDS, !(is.na(LDS$Longitude)))
+LDS <- subset(LDS, !(is.na(LDS$Latitude)))
+
+add_secondary_kvk <- function(df) {
+    # Remove duplicates and NAs in geo-coordinates
+    # df=subset(df,!(duplicated(df$Longitude)))
+    # df=subset(df,!(duplicated(df$Latitude)))
+    df$Longitude <- as.numeric(df$Longitude)
+    df$Latitude <- as.numeric(df$Latitude)
+    df <- subset(df, !(is.na(df$Longitude)))
+    df <- subset(df, !(is.na(df$Latitude)))
+    df_sp <- SpatialPointsDataFrame(cbind(df$Longitude, df$Latitude), data = df, proj4string = CRS("+proj=longlat +datum=WGS84"))
+
+    df_sf <- st_as_sf(df_sp)
+
+    # df_sf_17=subset(df_sf,df_sf$Year=="2016-17")
+    # df_sf_18=subset(df_sf,df_sf$Year=="2017-18")
+    # df_sf_19=subset(df_sf,df_sf$Year=="2018-19")
+    # df_sf_20=subset(df_sf,df_sf$Year=="2019-20")
+    # df_sf_21=subset(df_sf,df_sf$Year=="2020-21")
+
+    # Precipitation
+    prec_2016 <- terra::extract(Prec_monthly_2016, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    prec_2017 <- terra::extract(Prec_monthly_2017, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    prec_2018 <- terra::extract(Prec_monthly_2018, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    prec_2019 <- terra::extract(Prec_monthly_2019, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    prec_2020 <- terra::extract(Prec_monthly_2020, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    prec_2021 <- terra::extract(Prec_monthly_2021, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+
+    # Min temperature
+    tmin_2016 <- terra::extract(Tmin_monthly_2016, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmin_2017 <- terra::extract(Tmin_monthly_2017, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmin_2018 <- terra::extract(Tmin_monthly_2018, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmin_2019 <- terra::extract(Tmin_monthly_2019, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmin_2020 <- terra::extract(Tmin_monthly_2020, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmin_2021 <- terra::extract(Tmin_monthly_2021, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+
+    # Max temperature
+    tmax_2016 <- terra::extract(Tmax_monthly_2016, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmax_2017 <- terra::extract(Tmax_monthly_2017, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmax_2018 <- terra::extract(Tmax_monthly_2018, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmax_2019 <- terra::extract(Tmax_monthly_2019, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmax_2020 <- terra::extract(Tmax_monthly_2020, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+    tmax_2021 <- terra::extract(Tmax_monthly_2021, vect(df_sf), na.rm = TRUE, fun = mean, df = TRUE, buffer = 5000)
+
+
+    # Merge all soils and population
+    geodata_df <- list(
+        prec_2016, prec_2017, prec_2018, prec_2019, prec_2020, prec_2021,
+        tmin_2016, tmin_2017, tmin_2018, tmin_2019, tmin_2020, tmin_2021,
+        tmax_2016, tmax_2017, tmax_2018, tmax_2019, tmax_2020, tmax_2021
+    )
+
+    geodata_df <- Reduce(function(x, y) merge(x, y, all = TRUE), geodata_df)
+    # geodata_df=return(data.frame(geodata_df))
+
+    write.csv(geodata_df, paste0("prec_max_min_tem", ".csv"))
+
+    write.csv(prec_2016, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2016", ".csv"))
+    write.csv(prec_2017, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2017", ".csv"))
+    write.csv(prec_2018, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2018", ".csv"))
+    write.csv(prec_2019, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2019", ".csv"))
+    write.csv(prec_2020, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2020", ".csv"))
+    write.csv(prec_2021, paste0("EUP_Bihar_CHIRPSClimatedata/prec_2021", ".csv"))
+
+    write.csv(tmin_2016, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2016", ".csv"))
+    write.csv(tmin_2017, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2017", ".csv"))
+    write.csv(tmin_2018, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2018", ".csv"))
+    write.csv(tmin_2019, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2019", ".csv"))
+    write.csv(tmin_2020, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2020", ".csv"))
+    write.csv(tmin_2021, paste0("EUP_Bihar_CHIRPSClimatedata/tmin_2021", ".csv"))
+
+    write.csv(tmax_2016, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2016", ".csv"))
+    write.csv(tmax_2017, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2017", ".csv"))
+    write.csv(tmax_2018, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2018", ".csv"))
+    write.csv(tmax_2019, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2019", ".csv"))
+    write.csv(tmax_2020, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2020", ".csv"))
+    write.csv(tmax_2021, paste0("EUP_Bihar_CHIRPSClimatedata/tmax_2021", ".csv"))
+}
+add_secondary_kvk(LDS)
+```
+
+## Import the tables
+
+```{r}
+prec_2016 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2016.csv")
+colnames(prec_2016) <- paste0(colnames(prec_2016), "_prec_16")
+
+prec_2017 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2017.csv")
+colnames(prec_2017) <- paste0(colnames(prec_2017), "_prec_17")
+
+prec_2018 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2018.csv")
+colnames(prec_2018) <- paste0(colnames(prec_2018), "_prec_18")
+
+prec_2019 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2019.csv")
+colnames(prec_2019) <- paste0(colnames(prec_2019), "_prec_19")
+
+prec_2020 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2020.csv")
+colnames(prec_2020) <- paste0(colnames(prec_2020), "_prec_20")
+
+prec_2021 <- read.csv("EUP_Bihar_CHIRPSClimatedata/prec_2021.csv")
+colnames(prec_2021) <- paste0(colnames(prec_2021), "_prec_21")
+
+prec_2016_21 <- cbind(prec_2016, prec_2017, prec_2018, prec_2019, prec_2020, prec_2021)
+
+LDS <- cbind(LDS, prec_2016_21)
+
+
+# tmin
+
+tmin_2016 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2016.csv")
+colnames(tmin_2016) <- paste0(colnames(tmin_2016), "_tmin_16")
+
+tmin_2017 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2017.csv")
+colnames(tmin_2017) <- paste0(colnames(tmin_2017), "_tmin_17")
+
+tmin_2018 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2018.csv")
+colnames(tmin_2018) <- paste0(colnames(tmin_2018), "_tmin_18")
+
+tmin_2019 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2019.csv")
+colnames(tmin_2019) <- paste0(colnames(tmin_2019), "_tmin_19")
+
+tmin_2020 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2020.csv")
+colnames(tmin_2020) <- paste0(colnames(tmin_2020), "_tmin_20")
+
+tmin_2021 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmin_2021.csv")
+colnames(tmin_2021) <- paste0(colnames(tmin_2021), "_tmin_21")
+
+tmin_2016_21 <- cbind(tmin_2016, tmin_2017, tmin_2018, tmin_2019, tmin_2020, tmin_2021)
+
+LDS <- cbind(LDS, tmin_2016_21)
+
+
+# Tmax
+
+tmax_2016 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2016.csv")
+colnames(tmax_2016) <- paste0(colnames(tmax_2016), "_tmax_16")
+
+tmax_2017 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2017.csv")
+colnames(tmax_2017) <- paste0(colnames(tmax_2017), "_tmax_17")
+
+tmax_2018 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2018.csv")
+colnames(tmax_2018) <- paste0(colnames(tmax_2018), "_tmax_18")
+
+tmax_2019 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2019.csv")
+colnames(tmax_2019) <- paste0(colnames(tmax_2019), "_tmax_19")
+
+tmax_2020 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2020.csv")
+colnames(tmax_2020) <- paste0(colnames(tmax_2020), "_tmax_20")
+
+tmax_2021 <- read.csv("EUP_Bihar_CHIRPSClimatedata/tmax_2021.csv")
+colnames(tmax_2021) <- paste0(colnames(tmax_2021), "_tmax_21")
+
+tmax_2016_21 <- cbind(tmax_2016, tmax_2017, tmax_2018, tmax_2019, tmax_2020, tmax_2021)
+
+LDS <- cbind(LDS, tmax_2016_21)
+
+# Change precipitation variables from inches to mm
+
+LDS$Jan_prec_16 <- LDS$Jan_prec_16 * 25.4
+LDS$Feb_prec_16 <- LDS$Feb_prec_16 * 25.4
+LDS$Mar_prec_16 <- LDS$Mar_prec_16 * 25.4
+LDS$Apr_prec_16 <- LDS$Apr_prec_16 * 25.4
+LDS$May_prec_16 <- LDS$May_prec_16 * 25.4
+LDS$Jun_prec_16 <- LDS$Jun_prec_16 * 25.4
+LDS$Jul_prec_16 <- LDS$Jul_prec_16 * 25.4
+LDS$Aug_prec_16 <- LDS$Aug_prec_16 * 25.4
+LDS$Sep_prec_16 <- LDS$Sep_prec_16 * 25.4
+LDS$Oct_prec_16 <- LDS$Oct_prec_16 * 25.4
+LDS$Nov_prec_16 <- LDS$Nov_prec_16 * 25.4
+LDS$Dec_prec_16 <- LDS$Dec_prec_16 * 25.4
+
+LDS$Jan_prec_17 <- LDS$Jan_prec_17 * 25.4
+LDS$Feb_prec_17 <- LDS$Feb_prec_17 * 25.4
+LDS$Mar_prec_17 <- LDS$Mar_prec_17 * 25.4
+LDS$Apr_prec_17 <- LDS$Apr_prec_17 * 25.4
+LDS$May_prec_17 <- LDS$May_prec_17 * 25.4
+LDS$Jun_prec_17 <- LDS$Jun_prec_17 * 25.4
+LDS$Jul_prec_17 <- LDS$Jul_prec_17 * 25.4
+LDS$Aug_prec_17 <- LDS$Aug_prec_17 * 25.4
+LDS$Sep_prec_17 <- LDS$Sep_prec_17 * 25.4
+LDS$Oct_prec_17 <- LDS$Oct_prec_17 * 25.4
+LDS$Nov_prec_17 <- LDS$Nov_prec_17 * 25.4
+LDS$Dec_prec_17 <- LDS$Dec_prec_17 * 25.4
+
+LDS$Jan_prec_18 <- LDS$Jan_prec_18 * 25.4
+LDS$Feb_prec_18 <- LDS$Feb_prec_18 * 25.4
+LDS$Mar_prec_18 <- LDS$Mar_prec_18 * 25.4
+LDS$Apr_prec_18 <- LDS$Apr_prec_18 * 25.4
+LDS$May_prec_18 <- LDS$May_prec_18 * 25.4
+LDS$Jun_prec_18 <- LDS$Jun_prec_18 * 25.4
+LDS$Jul_prec_18 <- LDS$Jul_prec_18 * 25.4
+LDS$Aug_prec_18 <- LDS$Aug_prec_18 * 25.4
+LDS$Sep_prec_18 <- LDS$Sep_prec_18 * 25.4
+LDS$Oct_prec_18 <- LDS$Oct_prec_18 * 25.4
+LDS$Nov_prec_18 <- LDS$Nov_prec_18 * 25.4
+LDS$Dec_prec_18 <- LDS$Dec_prec_18 * 25.4
+
+LDS$Jan_prec_19 <- LDS$Jan_prec_19 * 25.4
+LDS$Feb_prec_19 <- LDS$Feb_prec_19 * 25.4
+LDS$Mar_prec_19 <- LDS$Mar_prec_19 * 25.4
+LDS$Apr_prec_19 <- LDS$Apr_prec_19 * 25.4
+LDS$May_prec_19 <- LDS$May_prec_19 * 25.4
+LDS$Jun_prec_19 <- LDS$Jun_prec_19 * 25.4
+LDS$Jul_prec_19 <- LDS$Jul_prec_19 * 25.4
+LDS$Aug_prec_19 <- LDS$Aug_prec_19 * 25.4
+LDS$Sep_prec_19 <- LDS$Sep_prec_19 * 25.4
+LDS$Oct_prec_19 <- LDS$Oct_prec_19 * 25.4
+LDS$Nov_prec_19 <- LDS$Nov_prec_19 * 25.4
+LDS$Dec_prec_19 <- LDS$Dec_prec_19 * 25.4
+
+LDS$Jan_prec_20 <- LDS$Jan_prec_20* 25.4
+LDS$Feb_prec_20 <- LDS$Feb_prec_20 * 25.4
+LDS$Mar_prec_20 <- LDS$Mar_prec_20 * 25.4
+LDS$Apr_prec_20 <- LDS$Apr_prec_20 * 25.4
+LDS$May_prec_20 <- LDS$May_prec_20 * 25.4
+LDS$Jun_prec_20 <- LDS$Jun_prec_20 * 25.4
+LDS$Jul_prec_20 <- LDS$Jul_prec_20 * 25.4
+LDS$Aug_prec_20 <- LDS$Aug_prec_20 * 25.4
+LDS$Sep_prec_20 <- LDS$Sep_prec_20 * 25.4
+LDS$Oct_prec_20 <- LDS$Oct_prec_20 * 25.4
+LDS$Nov_prec_20 <- LDS$Nov_prec_20 * 25.4
+LDS$Dec_prec_20 <- LDS$Dec_prec_20 * 25.4
+
+write.csv(LDS,"LDS_wheat_public_cleaned2.csv")
+save.image("LDS_Public_Workspace2.RData")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```

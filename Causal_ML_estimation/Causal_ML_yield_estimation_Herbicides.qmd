@@ -1,0 +1,251 @@
+---
+title: "Causal ML counterfactual yield gains"
+format: 
+    html:
+      code-fold: true
+      code-tools: true
+fig-dpi: 300
+fig-width: 8.88
+fig-align: center
+fig-height: 5
+
+self-contained: true
+author: Maxwell Mkondiwa
+editor: visual
+toc: true
+toc-location: left
+number-sections: true
+execute: 
+  message: false
+  warning: false
+  echo: true
+---
+
+# Data manipulation
+
+```{r}
+
+#rm(list=ls())
+set.seed(2)
+# Packages --------------------
+library(sp)
+#library(rgdal)
+library(dplyr)
+library(rio)
+library(readxl)
+library(sf)
+library(ggplot2)
+library(grf)
+library(forcats)
+#library(bbplot)
+suppressMessages(library(mapview))
+
+load("C:/Users/MMKONDIWA/OneDrive - CIMMYT/Documents/GitHub/spatial-economic-surplus/Causal_ML_estimation/LDS_Public_Workspace2.RData")
+
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T5_16Dec"]=1
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T4_15Dec"]=2
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T3_30Nov"]=3
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T2_20Nov"]=4
+LDS$Sowing_Date_Schedule_rating_num[LDS$Sowing_Date_Schedule=="T1_10Nov"]=5
+
+LDS$Sowing_Date_Schedule=ordered(LDS$Sowing_Date_Schedule,levels=c("T5_16Dec","T4_15Dec","T3_30Nov","T2_20Nov","T1_10Nov"))
+
+# Subset for Bihar
+LDS=subset(LDS,LDS$A.q102_state=="Bihar")
+
+# Select variables needed for the analysis -----------------------------
+LDSestim=subset(LDS, select=c("hhid","Jan_tmin_18","Feb_tmin_18","Mar_tmin_18", "Apr_tmin_18","Jan_tmax_18","Feb_tmax_18","Mar_tmax_18", "Apr_tmax_18","C.q307_largestPlotType","A.q114_socialCategory","M.q702_hhMemAg","J.q5601_1herbName","D.q410_varName","Sowing_Date_Schedule_rating_num","G.q5305_irrigTimes_cat"
+
+,"Sowing_Date_Schedule","Rabi2017_18","Sowing_Date_Early","Weedmanual","gpw_v4_population_density_rev11_2020_30_sec","M.q703_marketSaleShare","I.q5512_lodgingPercent","I.q5505_weedSeverity_num","I.q5509_diseaseSeverity_num","I.q5506_insectSeverity_num",
+                              "I.q5504_floodSeverity_num","I.q5502_droughtSeverity_num","I.q5502_droughtSeverity","A.q114_socialCategory","A.q112_fEdu","A.q112_fEdu_new","G.q5301_irrigAvail_dum","G.q5305_irrigTimes_onevsall","G.q5305_irrigTimes_twovs1","G.q5305_irrigTimes_threevs1","G.q5305_irrigTimes_fourplusvs1","PumpEnergySource","IrrigSource","G.q5305_irrigTimes","D.q403_soilPerception"
+,
+                              "D.q401_soilTexture","D.q402_drainClass","PrevCropHarvestDayfor1stJan2017_num","D.prevCrop_Fallow","D.prevCrop_Rice","I.q5505_weedSeverity_num","L.q607_farmGatePricePerKg","L.tonPerHectare","C.q306_cropLarestAreaHA",
+                              "G.q5305_irrigTimes","variety_type_NMWV","Nperha","NperhaSq","Nperha_100belowvsabove","Nperha_100belowvs100_150","Nperha_100belowvs150_200","Nperha_100belowvs200_250","Nperha_100belowvs200plus",
+                              "P2O5perha","A.q111_fGenderdum","Weedmanaged","Weedherb","temp","precip","wc2.1_30s_elev",
+                              "M.q708_marketDistance","nitrogen_0.5cm","sand_0.5cm", "soc_5.15cm","O.largestPlotGPS.Longitude","O.largestPlotGPS.Latitude","A.q103_district","temp.2008","precip.2008","temp.2009",                               
+                              "precip.2009", "temp.2010","precip.2010","temp.2011","precip.2011","temp.2012","precip.2012","temp.2013","precip.2013","temp.2014","precip.2014","temp.2015","precip.2015","temp.2016",                                  
+                              "precip.2016","temp.2017","precip.2017"))
+
+
+# Socio-economic variables 
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="noSchooling"]=0
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="primary"]=1
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="matriculation"]=2
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="seniorSecondary"]=3
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="bachelors"]=4
+LDSestim$A.q112_fEdu_new_num[LDSestim$A.q112_fEdu_new=="Postgrad"]=5
+
+LDSestim$Caste_marginalized[LDSestim$A.q114_socialCategory=="General"]=0
+LDSestim$Caste_marginalized[LDSestim$A.q114_socialCategory%in%c("OBC","Other","SC","ST")]=1
+
+LDSestim$Plot_owned[LDSestim$C.q307_largestPlotType=="Owned"]=1
+LDSestim$Plot_owned[LDSestim$C.q307_largestPlotType%in%c("FarmedContract","Leased")]=0
+
+
+
+
+
+## Herbicides cleaning -----------------------
+
+LDSestim$J.q5601_1herbName_2=gsub("([^A-Za-z0-9 ])+","", LDSestim$J.q5601_1herbName)
+
+LDSestim$J.q5601_1herbName_2=as.character(LDSestim$J.q5601_1herbName_2)
+LDSestim$J.q5601_1herbName_2[LDSestim$J.q5601_1herbName_2==""]="NA"
+
+table(LDSestim$J.q5601_1herbName_2)
+
+LDSestim$Herbicidename="NA"
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("2  4 D","2 4 d","2-4 D","2 4 D","2 4d","2 4D","24 D","24d","2D","34D","hera","Hera","24D")]="2,4-D"
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("SulfosulfuronMetsulfuron","SulfosulfuronMetsulfuron")]="SulfosulfuronMetsulfuron"
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("CarfentrazoneSulfosulfuron","Carfentrazone")]="Carfentrazone"
+
+
+
+# Metsulfuron -----------
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("Metsu","MetsulfuronClodinafop","Metsulfuronsulfosulfuron","Metsulfuron")]="Metsulfuron"
+
+#Sulfusulfuran ---------------------------
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("Leader","Sufosulfuran","Sulfosufuran","Sulfosulfuran","Sulfosulfuron")]="Sulfosulfuron"
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("Pendimethalin","Pendimethillin","Pendia","Penida","Stomp","Pendimethalin")]="Pendimethalin"
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("TOTAL","Totak","total","Tal","Total")]="Total"
+
+LDSestim$Herbicidename[LDSestim$J.q5601_1herbName_2%in%c("unknown","Unknown")]="Unknown"
+
+LDSestim$Herbicidename[LDSestim$Weedmanual==1 & LDSestim$Weedherb==1]="Manual_herb"
+LDSestim$Herbicidename[LDSestim$Weedmanual==1 & LDSestim$Weedherb==0]="Manual"
+
+LDSestim$Herbicidename[is.na(LDSestim$J.q5601_1herbName_2) & LDSestim$Weedherb==1]="Unknown"
+LDSestim$Herbicidename[LDSestim$Weedmanaged==0]="None"
+LDSestim$Herbicidename[is.na(LDSestim$J.q5601_1herbName_2) & LDSestim$Weedherb==0 & LDSestim$Weedmanual==0]="None"
+
+table(LDSestim$Herbicidename,LDSestim$Weedherb) # There are some observations where herbicide times is 0 but they recorded the herbicide name. We treated these as no herbicide application
+
+table(LDSestim$J.q5601_1herbName_2,LDSestim$Weedherb)
+
+
+LDSestim$Herbicidename_cat=NA
+
+LDSestim$Herbicidename_cat[LDSestim$Herbicidename=="None"]="No weeding"
+LDSestim$Herbicidename_cat[LDSestim$Herbicidename=="2,4-D"]="2,4-D"
+LDSestim$Herbicidename_cat[LDSestim$Herbicidename=="Manual"]="Manual"
+LDSestim$Herbicidename_cat[LDSestim$Herbicidename=="Manual_herb"]="Manual_herb"
+
+LDSestim$Herbicidename_cat[LDSestim$Herbicidename%in%c("SulfosulfuronMetsulfuron","Total")]="SulfosulfuronMetsulfuron"
+
+LDSestim$Herbicidename_cat=ordered(LDSestim$Herbicidename_cat,levels=c("No weeding","Manual","Manual_herb","2,4-D","SulfosulfuronMetsulfuron"))
+
+
+#LDSestim_herb=subset(LDSestim, !(is.na(LDSestim$Herbicidename_cat)))
+
+LDSestim_herb=subset(LDSestim, LDSestim$Weedmanual==0)
+# Multi-arm offline policy evaluation 
+
+library(grf)
+library(policytree)
+
+LDSestim_herb=subset(LDSestim_herb, select=c("hhid","Jan_tmin_18","Feb_tmin_18","Mar_tmin_18", "Apr_tmin_18","Jan_tmax_18","Feb_tmax_18","Mar_tmax_18", "Apr_tmax_18","Herbicidename_cat","G.q5305_irrigTimes_cat","Sowing_Date_Schedule_rating_num","L.tonPerHectare","I.q5505_weedSeverity_num","I.q5509_diseaseSeverity_num","I.q5506_insectSeverity_num","I.q5502_droughtSeverity_num",                                       "Nperha","P2O5perha","variety_type_NMWV","G.q5305_irrigTimes","Weedmanaged","temp","precip","wc2.1_30s_elev",
+                                                       "M.q708_marketDistance","C.q306_cropLarestAreaHA","A.q112_fEdu_new_num","Caste_marginalized","Plot_owned","A.q111_fGenderdum","nitrogen_0.5cm","sand_0.5cm", "soc_5.15cm","O.largestPlotGPS.Latitude","O.largestPlotGPS.Longitude","A.q103_district","Weedherb"))
+
+library(tidyr)
+LDSestim_herb=LDSestim_herb %>% drop_na()
+
+
+## Causal random forest -----------------
+
+
+```
+
+# Binary causal ML
+
+```{r}
+
+# Calibration check: Multi-arm causal RF does not yet calibration check
+ ## We use binary causal RF to do that
+
+#LDSestim_herb=subset(LDSestim_herb,LDSestim_herb$Herbicidename_cat%in%c("Manual_herb","2,4-D","SulfosulfuronMetsulfuron","No weeding"))
+
+#LDSestim_herb$Herbicidename_cat_bin[LDSestim_herb$Herbicidename_cat%in%c("No weeding","Manual")]=0
+
+#LDSestim_herb$Herbicidename_cat_bin[LDSestim_herb$Herbicidename_cat%in%c("Manual_herb","2,4-D","SulfosulfuronMetsulfuron")]=1
+
+
+#W_cf_herb_binary=as.vector(LDSestim_herb$Herbicidename_cat_bin)
+
+
+W_cf_herb_binary=as.vector(LDSestim_herb$Weedherb)
+
+
+Y_cf_herb=as.vector(LDSestim_herb$L.tonPerHectare)
+
+X_cf_herb=subset(LDSestim_herb, select=c("Jan_tmin_18","Feb_tmin_18","Mar_tmin_18", "Apr_tmin_18","Jan_tmax_18","Feb_tmax_18","Mar_tmax_18", "Apr_tmax_18","I.q5505_weedSeverity_num","I.q5509_diseaseSeverity_num","I.q5506_insectSeverity_num",                     "Nperha","P2O5perha","variety_type_NMWV","G.q5305_irrigTimes","Sowing_Date_Schedule_rating_num","A.q111_fGenderdum","temp","precip","wc2.1_30s_elev","M.q708_marketDistance","C.q306_cropLarestAreaHA","A.q112_fEdu_new_num","Caste_marginalized","Plot_owned","nitrogen_0.5cm","sand_0.5cm", "soc_5.15cm","O.largestPlotGPS.Latitude","O.largestPlotGPS.Longitude"))
+
+X_cf_herb1=subset(LDSestim_herb, select=c("Jan_tmin_18","Feb_tmin_18","Mar_tmin_18", "Apr_tmin_18","Jan_tmax_18","Feb_tmax_18","Mar_tmax_18", "Apr_tmax_18","I.q5505_weedSeverity_num","I.q5509_diseaseSeverity_num","I.q5506_insectSeverity_num",                     "Nperha","P2O5perha","variety_type_NMWV","G.q5305_irrigTimes","Sowing_Date_Schedule_rating_num","A.q111_fGenderdum","temp","precip","wc2.1_30s_elev","M.q708_marketDistance","C.q306_cropLarestAreaHA","A.q112_fEdu_new_num","Caste_marginalized","Plot_owned","nitrogen_0.5cm","sand_0.5cm", "soc_5.15cm","O.largestPlotGPS.Latitude","O.largestPlotGPS.Longitude","A.q103_district"))
+
+
+
+# Probability random forest to create weights
+W.multi_herb.forest_binary <- regression_forest(X_cf_herb, W_cf_herb_binary,
+  equalize.cluster.weights = FALSE,
+  seed = 2
+)
+W.hat.multi.all_herb_binary <- predict(W.multi_herb.forest_binary, estimate.variance = TRUE)$predictions
+
+
+# Regression forest to get expected responses 
+Y.multi_herb.forest_binary <- regression_forest(X_cf_herb, Y_cf_herb,
+  equalize.cluster.weights = FALSE,
+  seed = 2
+)
+
+print(Y.multi_herb.forest_binary)
+varimp.multi_herb_binary <- variable_importance(Y.multi_herb.forest_binary)
+Y.hat.multi.all_herb_binary <- predict(Y.multi_herb.forest_binary, estimate.variance = TRUE)$predictions
+
+# Fit binary causal RF model
+multi_herb.forest_binary <- causal_forest(X = X_cf_herb, Y = Y_cf_herb, W = W_cf_herb_binary ,W.hat=W.hat.multi.all_herb_binary,Y.hat=Y.hat.multi.all_herb_binary,seed=2) 
+
+varimp.multi_herb_cf_binary <- variable_importance(multi_herb.forest_binary)
+
+# Average treatment effects
+multi_herb_ate_binary=average_treatment_effect(multi_herb.forest_binary,target.sample = "overlap")
+multi_herb_ate_binary
+
+multi_herb_binary_calibration=test_calibration(multi_herb.forest_binary)
+multi_herb_binary_calibration
+
+
+
+```
+
+# Export district data
+
+```{r}
+
+tau.hat_weeding_herb=predict(multi_herb.forest_binary, target.sample = "all",estimate.variance=TRUE)
+summary(tau.hat_weeding_herb$predictions)
+
+
+X_cf_weeding_herbtau=data.frame(X_cf_herb1,tau.hat_weeding_herb)
+
+
+library(rutilstb)
+tau.hat_weeding_herb_predictions_dist=tabstat(X_cf_weeding_herbtau,var=c("predictions"),by="A.q103_district")
+
+tau.hat_weeding_herb_predictions_dist=subset(tau.hat_weeding_herb_predictions_dist,!(tau.hat_weeding_herb_predictions_dist$A.q103_district%in%c("Purnia","Kishanganj")))
+
+write.csv(tau.hat_weeding_herb_predictions_dist,"C:/Users/MMKONDIWA/OneDrive - CIMMYT/Documents/GitHub/spatial-economic-surplus/Causal_ML_estimation/tau.hat_weeding_herb_predictions_dist.csv")
+
+write.csv(tau.hat_weeding_herb_predictions_dist,"C:/Users/MMKONDIWA/OneDrive - CIMMYT/Documents/GitHub/spatial-economic-surplus/tau.hat_weeding_herb_predictions_dist.csv")
+
+
+
+
+
+
+
+```
