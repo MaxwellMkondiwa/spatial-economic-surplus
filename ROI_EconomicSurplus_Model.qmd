@@ -261,9 +261,9 @@ $$
 # Producer surplus
 #APY_plus_adoption$producer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*APY_plus_adoption$K_shift_A*(1-0.5*APY_plus_adoption$K_shift_A*APY_plus_adoption$Supply_Elast)
 
-APY_plus_adoption$producer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*(APY_plus_adoption$K_shift_A-APY_plus_adoption$Z_t)*(1+0.5*APY_plus_adoption$Z_t*APY_plus_adoption$Demand_Elast)
+APY_plus_adoption$producer_surplus=APY_plus_adoption$Production_Tonnes*1000*APY_plus_adoption$Prices*(APY_plus_adoption$K_shift_A-APY_plus_adoption$Z_t)*(1+(0.5*APY_plus_adoption$Z_t*APY_plus_adoption$Demand_Elast))
 
-APY_plus_adoption$producer_surplus_Rs_per_ha=(APY_plus_adoption$producer_surplus/APY_plus_adoption$Area_Hectare)*1000
+APY_plus_adoption$producer_surplus_Rs_per_ha=(APY_plus_adoption$producer_surplus/APY_plus_adoption$Area_Hectare)
 
 # Consumer surplus
 APY_plus_adoption$consumer_surplus=APY_plus_adoption$Production_Tonnes*APY_plus_adoption$Prices*APY_plus_adoption$Z_t*(1+0.5*APY_plus_adoption$Z_t*APY_plus_adoption$Demand_Elast)
@@ -282,9 +282,9 @@ For a small open economy in which the state's contribution cannot affect global 
 $$
 
 ```{r}
-APY_plus_adoption$producer_surplus_open_econ <- APY_plus_adoption$Production_Tonnes * APY_plus_adoption$Prices * (1 - 0.5 * APY_plus_adoption$K_shift_A * APY_plus_adoption$Supply_Elast)
+APY_plus_adoption$producer_surplus_open_econ <- APY_plus_adoption$Production_Tonnes* 1000* APY_plus_adoption$Prices * (1 - (0.5 * APY_plus_adoption$K_shift_A * APY_plus_adoption$Supply_Elast))
 
-APY_plus_adoption$producer_surplus_open_econ_Rs_per_ha <- (APY_plus_adoption$producer_surplus_open_econ / APY_plus_adoption$Area_Hectare) * 1000
+APY_plus_adoption$producer_surplus_open_econ_Rs_per_ha <- (APY_plus_adoption$producer_surplus_open_econ / APY_plus_adoption$Area_Hectare) 
 
 ```
 
@@ -343,8 +343,7 @@ APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual <- APY_plus_
 sum(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual)
 summary(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual)
 
-APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
-
+APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) 
 summary(APY_plus_adoption_indic$Producer_present_value_open_econ_sum_annual_Rs_ha)
 
 # Producer surplus
@@ -353,7 +352,7 @@ APY_plus_adoption_indic$Producer_net_present_value_sum_annual <- APY_plus_adopti
 sum(APY_plus_adoption_indic$Producer_net_present_value_sum_annual)
 summary(APY_plus_adoption_indic$Producer_net_present_value_sum_annual)
 
-APY_plus_adoption_indic$Producer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+APY_plus_adoption_indic$Producer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Producer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) 
 
 summary(APY_plus_adoption_indic$Producer_net_present_value_sum_annual_Rs_ha)
 
@@ -363,7 +362,7 @@ APY_plus_adoption_indic$Consumer_net_present_value_sum_annual <- APY_plus_adopti
 sum(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual)
 summary(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual)
 
-APY_plus_adoption_indic$Consumer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Consumer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+APY_plus_adoption_indic$Consumer_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Consumer_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) 
 
 summary(APY_plus_adoption_indic$Consumer_net_present_value_sum_annual_Rs_ha)
 
@@ -374,7 +373,7 @@ APY_plus_adoption_indic$Total_net_present_value_sum_annual <- APY_plus_adoption_
 sum(APY_plus_adoption_indic$Total_net_present_value_sum_annual)
 summary(APY_plus_adoption_indic$Total_net_present_value_sum_annual)
 
-APY_plus_adoption_indic$Total_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Total_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) * 1000
+APY_plus_adoption_indic$Total_net_present_value_sum_annual_Rs_ha <- (APY_plus_adoption_indic$Total_net_present_value_sum_annual / APY_plus_adoption_indic$Wheat_area_mean) 
 
 summary(APY_plus_adoption_indic$Total_net_present_value_sum_annual_Rs_ha)
 
@@ -459,7 +458,7 @@ tmap_save(Wheat_production_sf_tmap, "figures/Wheat_production_sf_tmap.png", dpi 
 
 # Producer surplus
 
-mapview(APY_plus_adoption_indic_sf, zcol = "Producer_net_present_value_sum_annual", layer.name = "Producer surplus (INR 1000)")
+mapview(APY_plus_adoption_indic_sf, zcol = "Producer_net_present_value_sum_annual", layer.name = "Producer surplus (INR)")
 
 # Using tmap
 library(tmap)
@@ -467,7 +466,7 @@ tmap_mode("plot")
 
 prod_surplus_changes_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
     tm_borders(alpha = 0.5, col = "white") +
-    tm_polygons(col = "Producer_net_present_value_sum_annual", palette = "viridis", scale = 2.5, title = "Producer surplus (INR 1000)")
+    tm_polygons(col = "Producer_net_present_value_sum_annual", palette = "viridis", scale = 2.5, title = "Producer surplus (INR)")
 prod_surplus_changes_sf_tmap
 
 tmap_save(prod_surplus_changes_sf_tmap, "figures/prod_surplus_changes_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
@@ -478,7 +477,7 @@ tmap_mode("plot")
 
 prod_surplus_changes_open_econ_sf_tmap <- tm_shape(APY_plus_adoption_indic_sf) +
     tm_borders(alpha = 0.5, col = "white") +
-    tm_polygons(col = "Producer_present_value_open_econ_sum_annual", palette = "viridis", scale = 2.5, title = "Small open economy PS (INR 1000)")
+    tm_polygons(col = "Producer_present_value_open_econ_sum_annual", palette = "viridis", scale = 2.5, title = "Small open economy PS (INR)")
 prod_surplus_changes_open_econ_sf_tmap
 
 tmap_save(prod_surplus_changes_open_econ_sf_tmap, "figures/prod_surplus_changes_open_econ_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
@@ -512,9 +511,9 @@ tmap_save(prod_surplus_changes_open_econ_perha_sf_tmap, "figures/prod_surplus_ch
 
 
 
-mapview(APY_plus_adoption_indic_sf, zcol = "Consumer_net_present_value_sum_annual", layer.name = "Consumer surplus (INR 1000)")
+mapview(APY_plus_adoption_indic_sf, zcol = "Consumer_net_present_value_sum_annual", layer.name = "Consumer surplus (INR)")
 
-mapview(APY_plus_adoption_indic_sf, zcol = "Total_net_present_value_sum_annual", layer.name = "Total economic surplus (INR 1000)")
+mapview(APY_plus_adoption_indic_sf, zcol = "Total_net_present_value_sum_annual", layer.name = "Total economic surplus (INR)")
 
 
 library(reactable)
@@ -557,6 +556,24 @@ tmap_save(Yield_changes_sf_tmap, "figures/Yield_changes_sf_tmap.png", dpi = 300,
 
 
 
+
+
+# Revenue changes -----------------------------------------------------------------------
+library(tmap)
+tmap_mode("plot")
+
+Yield_changes_sf_prices=merge(Yield_changes_sf, Prices,by="Districts")
+
+Yield_changes_sf_prices$rev_gain_per_ha=Yield_changes_sf_prices$Yield_gain_t_ha*1000*Yield_changes_sf_prices$Prices
+
+Revenue_changes_sf_tmap <- tm_shape(Yield_changes_sf_prices) +
+    tm_borders(alpha = 0.5, col = "white") +
+    tm_polygons(col = "rev_gain_per_ha", palette = "viridis", scale = 2.5, title = "Revenue gain to herbicides (INR per ha)")
+Revenue_changes_sf_tmap
+
+tmap_save(Revenue_changes_sf_tmap, "figures/Revenue_changes_sf_tmap.png", dpi = 300, width = 3.88, height = 3.16)
+
+
 library(reactable)
 library(htmltools)
 library(fontawesome)
@@ -565,13 +582,13 @@ htmltools::browsable(
     tagList(
         tags$button(
             tagList(fontawesome::fa("download"), "Download as CSV"),
-            onclick = "Reactable.downloadDataCSV('Yield_changes_sf', 'Yield_changes_sf.csv')"
+            onclick = "Reactable.downloadDataCSV('Yield_changes_sf_prices', 'Yield_changes_sf_prices.csv')"
         ),
         reactable(
-            Yield_changes_sf,
+            Yield_changes_sf_prices,
             searchable = TRUE,
             defaultPageSize = 38,
-            elementId = "Yield_changes_sf"
+            elementId = "Yield_changes_sf_prices"
         )
     )
 )
